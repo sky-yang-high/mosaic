@@ -4,16 +4,26 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"math"
 	"os"
+
+	"github.com/kyroy/kdtree"
+	"github.com/kyroy/kdtree/points"
 )
 
-type DB map[string][3]float64
+type TileDB struct {
+	kdtree.KDTree
+}
 
-var TILESDB DB
+var DefaultTilesDB *TileDB = NewTileDB()
+
+func NewTileDB() *TileDB {
+	var db TileDB
+	db.Init()
+	return &db
+}
 
 // 获取整张图片的平均rgb值
-func AverageColor(img image.Image) [3]float64 {
+func AverageColor(img image.Image) []float64 {
 	bounds := img.Bounds()
 	rsum, gsum, bsum := 0.0, 0.0, 0.0
 	//遍历图片所有点，把每个点的rgb值累加起来
@@ -24,7 +34,9 @@ func AverageColor(img image.Image) [3]float64 {
 		}
 	}
 	totalPixels := float64(bounds.Dx() * bounds.Dy())
-	return [3]float64{rsum / totalPixels, gsum / totalPixels, bsum / totalPixels}
+	ret := make([]float64, 0, 3)
+	ret = append(ret, rsum/totalPixels, gsum/totalPixels, bsum/totalPixels)
+	return ret
 }
 
 // 把图片缩放到指定的尺寸
@@ -43,11 +55,10 @@ func Resize(img image.Image, newWidth int) image.NRGBA {
 	return *out
 }
 
-// 读取并构建图片数据库
-func TilesDB() DB {
+// 初始化，从tiles中加载图片
+func (db *TileDB) Init() {
 	var dirname string = "tiles"
 	fmt.Println("开始构建嵌入图片数据库...")
-	db := make(DB)
 	files, _ := os.ReadDir(dirname)
 	for _, f := range files {
 		name := "tiles/" + f.Name()
@@ -55,7 +66,9 @@ func TilesDB() DB {
 		if err == nil {
 			img, _, err := image.Decode(file)
 			if err == nil {
-				db[name] = AverageColor(img)
+				avgColor := AverageColor(img)
+				pic := points.NewPoint(avgColor, name)
+				db.Insert(pic)
 			} else {
 				fmt.Println("构建嵌入图片数据库出错：", err, name)
 			}
@@ -65,37 +78,17 @@ func TilesDB() DB {
 		file.Close()
 	}
 	fmt.Println("构建嵌入图片数据库完毕")
-	return db
 }
 
-// 利用rgb值在素材库中查找最接近的tile
-func Nearest(target [3]float64, db *DB) string {
-	var filename string
-	smallest := 10000000.0
-	for k, v := range *db {
-		dist := distance(target, v)
-		if dist < smallest {
-			filename, smallest = k, dist
-		}
+func (db *TileDB) Nearest(color []float64) string {
+	target := db.KNN(points.NewPoint(color, ""), 1)
+	if pic, ok := target[0].(*points.Point); ok {
+		return pic.Data.(string)
+	} else {
+		return "tiles/0A1E54CDCA89EA5C420162ADE3E96FAF.jpg" // 找不到图片时返回默认图片
 	}
-	//INFO: 这里是否delete取决于是否允许出现重复的tile(素材库小的话就不用删了)
-	//delete(*db, filename)
-	return filename
 }
 
-func distance(p1 [3]float64, p2 [3]float64) float64 {
-	return math.Sqrt(sq(p2[0]-p1[0]) + sq(p2[1]-p1[1]) + sq(p2[2]-p1[2]))
-}
-
-func sq(n float64) float64 {
-	return n * n
-}
-
-// 复制TILESDB，因为读取文件过程很耗时
-func CloneTilesDB() DB {
-	db := make(DB)
-	for k, v := range TILESDB {
-		db[k] = v
-	}
-	return db
+func CloneTilesDB() *TileDB {
+	return DefaultTilesDB
 }

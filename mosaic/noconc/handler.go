@@ -38,9 +38,9 @@ func Mosaic(w http.ResponseWriter, r *http.Request) {
 		for x := bounds.Min.X; x < bounds.Max.X; x = x + tileSize {
 			// 使用图片区块左上角像素颜色作为该区块的平均颜色
 			r, g, b, _ := original.At(x, y).RGBA()
-			color := [3]float64{float64(r), float64(g), float64(b)}
+			color := []float64{float64(r), float64(g), float64(b)}
 			// 从嵌入图片数据库获取平均颜色与之最接近的嵌入图片
-			nearest := tilesdb.Nearest(color, &db)
+			nearest := db.Nearest(color)
 			file, err := os.Open(nearest)
 			if err == nil {
 				img, _, err := image.Decode(file)

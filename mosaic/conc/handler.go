@@ -28,10 +28,10 @@ func Mosaic(w http.ResponseWriter, r *http.Request) {
 	bounds := original.Bounds()
 	db := tilesdb.CloneTilesDB()
 	// 调用 cut 方法切分原始图片为 4 等份（切分后的子图片还会各自进行马赛克处理，这些都会通过协程异步执行）
-	c1 := cut(original, &db, tileSize, bounds.Min.X, bounds.Min.Y, bounds.Max.X/2, bounds.Max.Y/2)
-	c2 := cut(original, &db, tileSize, bounds.Max.X/2, bounds.Min.Y, bounds.Max.X, bounds.Max.Y/2)
-	c3 := cut(original, &db, tileSize, bounds.Min.X, bounds.Max.Y/2, bounds.Max.X/2, bounds.Max.Y)
-	c4 := cut(original, &db, tileSize, bounds.Max.X/2, bounds.Max.Y/2, bounds.Max.X, bounds.Max.Y)
+	c1 := cut(original, db, tileSize, bounds.Min.X, bounds.Min.Y, bounds.Max.X/2, bounds.Max.Y/2)
+	c2 := cut(original, db, tileSize, bounds.Max.X/2, bounds.Min.Y, bounds.Max.X, bounds.Max.Y/2)
+	c3 := cut(original, db, tileSize, bounds.Min.X, bounds.Max.Y/2, bounds.Max.X/2, bounds.Max.Y)
+	c4 := cut(original, db, tileSize, bounds.Max.X/2, bounds.Max.Y/2, bounds.Max.X, bounds.Max.Y)
 	// 将上述各自进行马赛克处理的子图片合并为最终的马赛克图片（通过协程异步执行）
 	c := combine(bounds, c1, c2, c3, c4)
 	buf1 := new(bytes.Buffer)
@@ -51,7 +51,7 @@ func Mosaic(w http.ResponseWriter, r *http.Request) {
 }
 
 // 按照指定坐标切分原始图片
-func cut(original image.Image, db *tilesdb.DB, tileSize, x1, y1, x2, y2 int) <-chan image.Image {
+func cut(original image.Image, db *tilesdb.TileDB, tileSize, x1, y1, x2, y2 int) <-chan image.Image {
 	c := make(chan image.Image)
 	sp := image.Point{0, 0}
 	// 由于对于每块切分后的图片会单独进行马赛克处理，所以为了提升处理性能，这里引入协程异步执行
@@ -60,8 +60,8 @@ func cut(original image.Image, db *tilesdb.DB, tileSize, x1, y1, x2, y2 int) <-c
 		for y := y1; y < y2; y = y + tileSize {
 			for x := x1; x < x2; x = x + tileSize {
 				r, g, b, _ := original.At(x, y).RGBA()
-				color := [3]float64{float64(r), float64(g), float64(b)}
-				nearest := tilesdb.Nearest(color, db)
+				color := []float64{float64(r), float64(g), float64(b)}
+				nearest := db.Nearest(color)
 				file, err := os.Open(nearest)
 				if err == nil {
 					img, _, err := image.Decode(file)

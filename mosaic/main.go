@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"mosaic/conc"
 	"mosaic/noconc"
-	"mosaic/tilesdb"
 	"net/http"
 )
 
@@ -17,10 +16,10 @@ func main() {
 	//mux.HandleFunc("/mosaic", noconc.Mosaic)
 	mux.HandleFunc("/mosaic", conc.Mosaic)
 	server := &http.Server{
-		Addr:    "127.0.0.1:8080",
+		Addr:    "127.0.0.1:8090",
 		Handler: mux,
 	}
-	tilesdb.TILESDB = tilesdb.TilesDB()
+	//tilesdb.TILESDB = tilesdb.TilesDB()
 	fmt.Println("图片马赛克应用服务器已启动...")
 	server.ListenAndServe()
 }
